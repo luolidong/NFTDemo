@@ -1,0 +1,20 @@
+{
+  "name": "DigitalAvatar #1",
+  "description": "A unique digital avatar NFT representing personal identity on the blockchain",
+  "image": "ipfs://bafkreicgca2txbjg26gpaksbbj4uvrb2gefy6rxjcgky5263ukag4ytsnq",
+  "attributes": [
+    {
+      "trait_type": "Type",
+      "value": "Avatar"
+    },
+    {
+      "trait_type": "Edition",
+      "value": "1 of 1"
+    },
+    {
+      "trait_type": "Format",
+      "value": "JPEG"
+    }
+  ]
+
+}
