@@ -1,18 +1,31 @@
-# DigitalAvatar NFT Project
+# NFT Market Project
 
-一个基于 OpenZeppelin 的 ERC721 NFT 项目，用于创建和部署数字头像 NFT。
+一个基于 OpenZeppelin 的完整 NFT 市场项目，支持 ERC721 NFT 的创建、上架、购买和交易，使用 ERC1363 扩展代币实现一键购买功能。
+
+## 项目功能
+
+- ✅ **ERC721 NFT 创建** - 铸造数字头像 NFT
+- ✅ **NFT 上架** - 持有者可设置价格上架 NFT
+- ✅ **NFT 购买** - 支持直接购买和 ERC1363 一键购买
+- ✅ **ERC1363 扩展代币** - 支持转账回调的市场代币
+- ✅ **退款机制** - 超额支付自动退还
+- ✅ **完整测试** - 覆盖所有核心功能
 
 ## 项目结构
 
 ```
 NFTDemo/
 ├── src/
-│   └── DigitalAvatar.sol    # ERC721 NFT 合约
+│   ├── DigitalAvatar.sol    # ERC721 NFT 合约
+│   ├── MarketToken.sol      # ERC1363 市场代币合约
+│   └── NFTMarket.sol        # NFT 市场合约
 ├── test/
-│   └── DigitalAvatar.t.sol  # 合约测试
+│   ├── DigitalAvatar.t.sol  # NFT 合约测试
+│   └── NFTMarket.t.sol      # NFT 市场测试
 ├── script/
-│   ├── DeployDigitalAvatar.s.sol   # 部署脚本
-│   └── MintDigitalAvatar.s.sol     # 铸造脚本
+│   ├── DeployDigitalAvatar.s.sol   # 部署 NFT 合约
+│   ├── MintDigitalAvatar.s.sol     # 铸造 NFT
+│   └── DeployNFTMarket.s.sol       # 部署完整市场
 ├── metadata/
 │   ├── avatar.jpg          # NFT 图片资源
 │   └── metadata.json       # NFT 元数据
@@ -20,6 +33,40 @@ NFTDemo/
     ├── forge-std/          # Foundry 标准库
     └── openzeppelin-contracts/  # OpenZeppelin 合约库
 ```
+
+## 合约说明
+
+### 1. DigitalAvatar (ERC721)
+
+标准 ERC721 NFT 合约，支持安全铸造和元数据管理。
+
+```solidity
+function safeMint(address to, string memory uri) public onlyOwner
+function mint(address to, string memory uri) public onlyOwner
+function tokenURI(uint256 tokenId) public view returns (string memory)
+```
+
+### 2. MarketToken (ERC20 + ERC1363)
+
+扩展的市场代币，支持转账回调功能：
+
+| 方法 | 说明 |
+|------|------|
+| `transferAndCall()` | 转账后触发接收者回调 |
+| `transferFromAndCall()` | 授权转账后触发回调 |
+| `mint()` | 铸造代币（仅拥有者） |
+| `burn()` | 销毁代币（仅拥有者） |
+
+### 3. NFTMarket (IERC1363Receiver)
+
+NFT 市场合约，实现 ERC1363 接收者接口：
+
+| 方法 | 说明 |
+|------|------|
+| `list(tokenId, price)` | 上架 NFT |
+| `delist(tokenId)` | 下架 NFT |
+| `buyNFT(tokenId, amount)` | 直接购买 NFT |
+| `onTransferReceived()` | ERC1363 回调购买 |
 
 ## 前置准备
 
@@ -109,11 +156,31 @@ forge build
 
 # 运行测试
 forge test -v
+
+# 运行特定测试
+forge test -v --match-test testBuyNFT
 ```
 
 ## 部署到 Sepolia 测试网
 
-### 步骤 1：部署合约
+### 方式一：部署完整市场
+
+```bash
+forge script script/DeployNFTMarket.s.sol:DeployNFTMarket \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
+  --broadcast \
+  --keystore ~/.foundry/keystores/my-sepolia-wallet.json \
+  -vvv
+```
+
+部署后会输出三个合约地址：
+- DigitalAvatar 地址
+- MarketToken 地址  
+- NFTMarket 地址
+
+### 方式二：分步部署
+
+#### 步骤 1：部署 NFT 合约
 
 ```bash
 forge script script/DeployDigitalAvatar.s.sol:DeployDigitalAvatar \
@@ -123,32 +190,144 @@ forge script script/DeployDigitalAvatar.s.sol:DeployDigitalAvatar \
   -vvv
 ```
 
-**复制部署输出中的合约地址**，例如：`0x1234...abcd`
-
-### 步骤 2：更新铸造脚本
-
-替换 `script/MintDigitalAvatar.s.sol` 中的合约地址和 metadata IPFS 地址：
+#### 步骤 2：部署市场代币
 
 ```bash
-# 设置变量
-export CONTRACT_ADDRESS="0xYourContractAddress"
-export METADATA_URI="ipfs://QmYourMetadataHash/metadata.json"
+# 复制以下代码创建部署脚本
+cat > script/DeployMarketToken.s.sol << 'EOF'
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+import "forge-std/Script.sol";
+import "../src/MarketToken.sol";
 
-# 更新合约地址
-sed -i '' "s/0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496/$CONTRACT_ADDRESS/" script/MintDigitalAvatar.s.sol
+contract DeployMarketToken is Script {
+    function run() public {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(deployerPrivateKey);
+        MarketToken token = new MarketToken();
+        console.log("MarketToken deployed at:", address(token));
+        vm.stopBroadcast();
+    }
+}
+EOF
 
-# 更新 metadata URI
-sed -i '' "s|ipfs://QmYourImageHashHere/metadata.json|$METADATA_URI|" script/MintDigitalAvatar.s.sol
-```
-
-### 步骤 3：铸造 NFT
-
-```bash
-forge script script/MintDigitalAvatar.s.sol:MintDigitalAvatar \
+# 部署
+forge script script/DeployMarketToken.s.sol:DeployMarketToken \
   --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
   --broadcast \
   --keystore ~/.foundry/keystores/my-sepolia-wallet.json \
   -vvv
+```
+
+#### 步骤 3：部署 NFT 市场
+
+```bash
+# 设置环境变量
+export NFT_ADDRESS="0xYourNFTContractAddress"
+export TOKEN_ADDRESS="0xYourMarketTokenAddress"
+
+# 创建部署脚本
+cat > script/DeployNFTMarketManual.s.sol << EOF
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+import "forge-std/Script.sol";
+import "../src/NFTMarket.sol";
+
+contract DeployNFTMarketManual is Script {
+    function run() public {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(deployerPrivateKey);
+        NFTMarket market = new NFTMarket($NFT_ADDRESS, $TOKEN_ADDRESS);
+        console.log("NFTMarket deployed at:", address(market));
+        vm.stopBroadcast();
+    }
+}
+EOF
+
+# 部署
+forge script script/DeployNFTMarketManual.s.sol:DeployNFTMarketManual \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
+  --broadcast \
+  --keystore ~/.foundry/keystores/my-sepolia-wallet.json \
+  -vvv
+```
+
+### 步骤 4：铸造测试代币
+
+```bash
+# 铸造代币给测试账户
+cast send $TOKEN_ADDRESS \
+  "mint(address,uint256)" \
+  "$(cast wallet address --keystore ~/.foundry/keystores/my-sepolia-wallet.json)" \
+  "1000000000000000000000" \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
+  --keystore ~/.foundry/keystores/my-sepolia-wallet.json
+```
+
+## 使用 NFT 市场
+
+### 1. 上架 NFT
+
+```bash
+# 需要先授权市场合约转移 NFT
+cast send $NFT_ADDRESS \
+  "setApprovalForAll(address,bool)" \
+  $MARKET_ADDRESS \
+  true \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
+  --keystore ~/.foundry/keystores/my-sepolia-wallet.json
+
+# 上架 NFT（价格 100 MTK）
+cast send $MARKET_ADDRESS \
+  "list(uint256,uint256)" \
+  0 \
+  100000000000000000000 \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
+  --keystore ~/.foundry/keystores/my-sepolia-wallet.json
+```
+
+### 2. 购买 NFT（方法一：直接调用）
+
+```bash
+# 授权市场合约花费代币
+cast send $TOKEN_ADDRESS \
+  "approve(address,uint256)" \
+  $MARKET_ADDRESS \
+  100000000000000000000 \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
+  --keystore ~/.foundry/keystores/my-sepolia-wallet.json
+
+# 购买 NFT
+cast send $MARKET_ADDRESS \
+  "buyNFT(uint256,uint256)" \
+  0 \
+  100000000000000000000 \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
+  --keystore ~/.foundry/keystores/my-sepolia-wallet.json
+```
+
+### 3. 购买 NFT（方法二：ERC1363 一键购买）
+
+```bash
+# 一步完成：转账代币 + 自动购买 NFT
+# data = abi.encode(tokenId)
+cast send $TOKEN_ADDRESS \
+  "transferAndCall(address,uint256,bytes)" \
+  $MARKET_ADDRESS \
+  100000000000000000000 \
+  "0x0000000000000000000000000000000000000000000000000000000000000000" \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
+  --keystore ~/.foundry/keystores/my-sepolia-wallet.json
+```
+
+### 4. 下架 NFT
+
+```bash
+cast send $MARKET_ADDRESS \
+  "delist(uint256)" \
+  0 \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
+  --keystore ~/.foundry/keystores/my-sepolia-wallet.json
 ```
 
 ## 验证部署
@@ -158,32 +337,36 @@ forge script script/MintDigitalAvatar.s.sol:MintDigitalAvatar \
 访问 Sepolia 区块浏览器：
 - https://sepolia.etherscan.io/address/your-contract-address
 
-### 验证合约代码（可选）
+### 验证合约代码
 
 ```bash
 forge verify-contract \
   --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
   --etherscan-api-key YOUR_ETHERSCAN_API_KEY \
   $CONTRACT_ADDRESS \
-  src/DigitalAvatar.sol:DigitalAvatar
+  src/NFTMarket.sol:NFTMarket
 ```
 
 ### 在 MetaMask 中查看 NFT
 
 1. 打开 MetaMask → 切换到 Sepolia 测试网
 2. 点击 "添加资产" → "添加 NFT"
-3. 输入合约地址和 Token ID（0）
+3. 输入合约地址和 Token ID
 
-## 检查 NFT 状态
+## 检查合约状态
 
 ```bash
-# 检查 NFT 余额
-cast call $CONTRACT_ADDRESS "balanceOf(address)(uint256)" \
+# 检查 NFT 上架信息
+cast call $MARKET_ADDRESS "getListing(uint256)(address,uint256,bool)" 0 \
+  --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo
+
+# 检查代币余额
+cast call $TOKEN_ADDRESS "balanceOf(address)(uint256)" \
   $(cast wallet address --keystore ~/.foundry/keystores/my-sepolia-wallet.json) \
   --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo
 
-# 查看 tokenURI
-cast call $CONTRACT_ADDRESS "tokenURI(uint256)(string)" 0 \
+# 检查 NFT 所有者
+cast call $NFT_ADDRESS "ownerOf(uint256)(address)" 0 \
   --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo
 ```
 
@@ -194,6 +377,7 @@ cast call $CONTRACT_ADDRESS "tokenURI(uint256)(string)" 0 \
 3. **备份钱包**：定期导出并安全保存助记词
 4. **测试网验证**：在主网部署前，先在测试网验证功能
 5. **使用环境变量**：敏感信息使用环境变量而非硬编码
+6. **权限控制**：仅授权必要的合约访问权限
 
 ## 许可证
 

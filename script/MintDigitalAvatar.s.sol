@@ -7,7 +7,7 @@ import "../src/DigitalAvatar.sol";
 contract MintDigitalAvatar is Script {
     function run() public {
         // 部署后替换为实际的合约地址
-        address nftAddress = 0xREPLACE_WITH_YOUR_CONTRACT_ADDRESS;
+        address nftAddress = 0x0000000000000000000000000000000000000000;
         DigitalAvatar nft = DigitalAvatar(nftAddress);
         
         vm.startBroadcast();
