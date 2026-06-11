@@ -5,6 +5,7 @@ out/
 # Commonly ignored directories
 .logs/
 .ignore/
+node_modules/
 
 # Ignores development broadcast logs
 !/broadcast
