@@ -26,12 +26,35 @@ pnpm install
 
 ## 配置
 
+### 环境变量
+
 创建 `.env` 文件（可选）：
 
 ```env
 RPC_URL=http://127.0.0.1:8545
 NFT_MARKET_ADDRESS=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
 ```
+
+### ABI 文件管理
+
+后端使用独立的 ABI 文件，位于 `abis/NFTMarket.json`。
+
+**更新 ABI 文件的方法：**
+
+```bash
+# 1. 在项目根目录编译合约
+cd ..
+forge build
+
+# 2. 复制最新的 ABI 文件到后端目录
+cp out/NFTMarket.sol/NFTMarket.json backend/abis/
+```
+
+**生产环境注意事项：**
+
+- ABI 文件已包含在 `backend/abis/` 目录中，无需依赖 Foundry 编译输出
+- 部署前请确保 ABI 文件与链上部署的合约版本一致
+- 更新合约后，务必重新编译并复制 ABI 文件
 
 ## 使用方法
 

@@ -2,43 +2,15 @@
 require('dotenv').config();
 const { createPublicClient, http, formatEther } = require('viem');
 const { localhost } = require('viem/chains');
+const fs = require('fs');
+const path = require('path');
 
 // NFTMarket 合约地址
 const NFT_MARKET_ADDRESS = process.env.NFT_MARKET_ADDRESS || '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
 
-// NFTMarket 合约 ABI
-const nftMarketAbi = [
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, name: 'seller', type: 'address' },
-      { indexed: true, name: 'tokenId', type: 'uint256' },
-      { indexed: false, name: 'price', type: 'uint256' }
-    ],
-    name: 'NFTListed',
-    type: 'event'
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, name: 'seller', type: 'address' },
-      { indexed: true, name: 'buyer', type: 'address' },
-      { indexed: true, name: 'tokenId', type: 'uint256' },
-      { indexed: false, name: 'price', type: 'uint256' }
-    ],
-    name: 'NFTSold',
-    type: 'event'
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, name: 'seller', type: 'address' },
-      { indexed: true, name: 'tokenId', type: 'uint256' }
-    ],
-    name: 'NFTDelisted',
-    type: 'event'
-  }
-];
+// 从本地 ABI 文件加载（生产环境配置）
+const abiPath = path.join(__dirname, 'abis/NFTMarket.json');
+const nftMarketAbi = JSON.parse(fs.readFileSync(abiPath, 'utf8')).abi;
 
 // 创建公共客户端
 const publicClient = createPublicClient({
