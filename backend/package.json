@@ -1,0 +1,17 @@
+{
+  "name": "nft-market-backend",
+  "version": "1.0.0",
+  "description": "NFT Market Event Listener using Viem",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "viem": "^2.7.10",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
