@@ -1,11 +1,12 @@
+// Viem 2.x 版本事件监听器 - 使用 watchBlocks API
 require('dotenv').config();
-const { createPublicClient, http, watchContractEvent, formatEther, Address } = require('viem');
+const { createPublicClient, http, formatEther } = require('viem');
 const { localhost } = require('viem/chains');
 
-// NFTMarket 合约地址（部署后需要更新）
-const NFT_MARKET_ADDRESS = process.env.NFT_MARKET_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+// NFTMarket 合约地址
+const NFT_MARKET_ADDRESS = process.env.NFT_MARKET_ADDRESS || '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
 
-// NFTMarket 合约 ABI（仅包含事件定义）
+// NFTMarket 合约 ABI
 const nftMarketAbi = [
   {
     anonymous: false,
@@ -42,111 +43,67 @@ const nftMarketAbi = [
 // 创建公共客户端
 const publicClient = createPublicClient({
   chain: localhost,
-  transport: http(process.env.RPC_URL || 'http://127.0.0.1:8545')
+  transport: http(process.env.RPC_URL || 'http://127.0.0.1:8545'),
+  pollingInterval: 1000
 });
 
 // 格式化地址
-const formatAddress = (addr) => {
-  if (Address.validate(addr)) {
-    return Address.format(addr);
-  }
-  return addr;
+const formatAddr = (addr) => {
+  return addr.toString();
 };
 
-// 监听上架事件
-const listenForListings = async () => {
-  console.log('\n🔔 开始监听 NFT 上架事件...');
+// 处理 NFTListed 事件
+const handleNFTListed = (log) => {
+  const { args, blockNumber, transactionHash } = log;
+  const timestamp = new Date().toLocaleString('zh-CN');
   
-  const unwatch = watchContractEvent(
-    publicClient,
-    {
-      address: NFT_MARKET_ADDRESS,
-      abi: nftMarketAbi,
-      eventName: 'NFTListed'
-    },
-    (event) => {
-      const { args, blockNumber, transactionHash } = event;
-      const timestamp = new Date().toLocaleString('zh-CN');
-      
-      console.log('\n═══════════════════════════════════════════════════');
-      console.log(`📅 ${timestamp}`);
-      console.log(`📦 [上架事件] NFT Listed`);
-      console.log(`├─ 区块号: ${blockNumber}`);
-      console.log(`├─ 交易哈希: ${transactionHash}`);
-      console.log(`├─ 卖家: ${formatAddress(args.seller)}`);
-      console.log(`├─ Token ID: ${args.tokenId.toString()}`);
-      console.log(`└─ 价格: ${formatEther(args.price)} MTK`);
-      console.log('═══════════════════════════════════════════════════');
-    }
-  );
-
-  return unwatch;
+  console.log('\n═══════════════════════════════════════════════════');
+  console.log(`📅 ${timestamp}`);
+  console.log(`📦 [上架事件] NFT Listed`);
+  console.log(`├─ 区块号: ${blockNumber}`);
+  console.log(`├─ 交易哈希: ${transactionHash}`);
+  console.log(`├─ 卖家: ${formatAddr(args.seller)}`);
+  console.log(`├─ Token ID: ${args.tokenId.toString()}`);
+  console.log(`└─ 价格: ${formatEther(args.price)} MTK`);
+  console.log('═══════════════════════════════════════════════════');
 };
 
-// 监听买卖事件
-const listenForSales = async () => {
-  console.log('\n🔔 开始监听 NFT 买卖事件...');
+// 处理 NFTSold 事件
+const handleNFTSold = (log) => {
+  const { args, blockNumber, transactionHash } = log;
+  const timestamp = new Date().toLocaleString('zh-CN');
   
-  const unwatch = watchContractEvent(
-    publicClient,
-    {
-      address: NFT_MARKET_ADDRESS,
-      abi: nftMarketAbi,
-      eventName: 'NFTSold'
-    },
-    (event) => {
-      const { args, blockNumber, transactionHash } = event;
-      const timestamp = new Date().toLocaleString('zh-CN');
-      
-      console.log('\n═══════════════════════════════════════════════════');
-      console.log(`📅 ${timestamp}`);
-      console.log(`💰 [买卖事件] NFT Sold`);
-      console.log(`├─ 区块号: ${blockNumber}`);
-      console.log(`├─ 交易哈希: ${transactionHash}`);
-      console.log(`├─ 卖家: ${formatAddress(args.seller)}`);
-      console.log(`├─ 买家: ${formatAddress(args.buyer)}`);
-      console.log(`├─ Token ID: ${args.tokenId.toString()}`);
-      console.log(`└─ 成交价格: ${formatEther(args.price)} MTK`);
-      console.log('═══════════════════════════════════════════════════');
-    }
-  );
-
-  return unwatch;
+  console.log('\n═══════════════════════════════════════════════════');
+  console.log(`📅 ${timestamp}`);
+  console.log(`💰 [买卖事件] NFT Sold`);
+  console.log(`├─ 区块号: ${blockNumber}`);
+  console.log(`├─ 交易哈希: ${transactionHash}`);
+  console.log(`├─ 卖家: ${formatAddr(args.seller)}`);
+  console.log(`├─ 买家: ${formatAddr(args.buyer)}`);
+  console.log(`├─ Token ID: ${args.tokenId.toString()}`);
+  console.log(`└─ 成交价格: ${formatEther(args.price)} MTK`);
+  console.log('═══════════════════════════════════════════════════');
 };
 
-// 监听下架事件
-const listenForDelistings = async () => {
-  console.log('\n🔔 开始监听 NFT 下架事件...');
+// 处理 NFTDelisted 事件
+const handleNFTDelisted = (log) => {
+  const { args, blockNumber, transactionHash } = log;
+  const timestamp = new Date().toLocaleString('zh-CN');
   
-  const unwatch = watchContractEvent(
-    publicClient,
-    {
-      address: NFT_MARKET_ADDRESS,
-      abi: nftMarketAbi,
-      eventName: 'NFTDelisted'
-    },
-    (event) => {
-      const { args, blockNumber, transactionHash } = event;
-      const timestamp = new Date().toLocaleString('zh-CN');
-      
-      console.log('\n═══════════════════════════════════════════════════');
-      console.log(`📅 ${timestamp}`);
-      console.log(`❌ [下架事件] NFT Delisted`);
-      console.log(`├─ 区块号: ${blockNumber}`);
-      console.log(`├─ 交易哈希: ${transactionHash}`);
-      console.log(`├─ 卖家: ${formatAddress(args.seller)}`);
-      console.log(`└─ Token ID: ${args.tokenId.toString()}`);
-      console.log('═══════════════════════════════════════════════════');
-    }
-  );
-
-  return unwatch;
+  console.log('\n═══════════════════════════════════════════════════');
+  console.log(`📅 ${timestamp}`);
+  console.log(`❌ [下架事件] NFT Delisted`);
+  console.log(`├─ 区块号: ${blockNumber}`);
+  console.log(`├─ 交易哈希: ${transactionHash}`);
+  console.log(`├─ 卖家: ${formatAddr(args.seller)}`);
+  console.log(`└─ Token ID: ${args.tokenId.toString()}`);
+  console.log('═══════════════════════════════════════════════════');
 };
 
 // 主函数
 const main = async () => {
   console.log('==============================================');
-  console.log('      NFT Market Event Listener');
+  console.log('      NFT Market Event Listener (Viem)');
   console.log('==============================================');
   console.log(`📡 连接到: ${process.env.RPC_URL || 'http://127.0.0.1:8545'}`);
   console.log(`📄 监听合约: ${NFT_MARKET_ADDRESS}`);
@@ -157,20 +114,59 @@ const main = async () => {
     const chainId = await publicClient.getChainId();
     console.log(`✅ 已连接到链 ID: ${chainId}`);
 
-    // 启动所有监听器
-    const unwatchers = [
-      await listenForListings(),
-      await listenForSales(),
-      await listenForDelistings()
-    ];
+    // 获取当前区块号
+    const currentBlock = await publicClient.getBlockNumber();
+    console.log(`📊 当前区块号: ${currentBlock}`);
 
-    console.log('\n🚀 所有监听器已启动，等待事件...');
+    console.log('\n🔔 开始监听所有事件...');
+
+    // 使用 watchBlocks 监听新区块
+    const unwatcher = publicClient.watchBlocks({
+      onBlock: async (block) => {
+        console.log(`\n📦 新区块: ${block.number}`);
+        
+        // 获取区块中的所有事件
+        const listedEvents = await publicClient.getContractEvents({
+          address: NFT_MARKET_ADDRESS,
+          abi: nftMarketAbi,
+          eventName: 'NFTListed',
+          fromBlock: block.number,
+          toBlock: block.number
+        });
+        
+        const soldEvents = await publicClient.getContractEvents({
+          address: NFT_MARKET_ADDRESS,
+          abi: nftMarketAbi,
+          eventName: 'NFTSold',
+          fromBlock: block.number,
+          toBlock: block.number
+        });
+        
+        const delistedEvents = await publicClient.getContractEvents({
+          address: NFT_MARKET_ADDRESS,
+          abi: nftMarketAbi,
+          eventName: 'NFTDelisted',
+          fromBlock: block.number,
+          toBlock: block.number
+        });
+
+        // 处理事件
+        listedEvents.forEach(handleNFTListed);
+        soldEvents.forEach(handleNFTSold);
+        delistedEvents.forEach(handleNFTDelisted);
+      },
+      onError: (error) => {
+        console.error('❌ 监听错误:', error.message);
+      }
+    });
+
+    console.log('\n🚀 监听器已启动，等待新区块...');
     console.log('按 Ctrl+C 停止监听');
 
     // 处理退出
     process.on('SIGINT', () => {
       console.log('\n\n⏹️ 正在停止监听器...');
-      unwatchers.forEach(unwatch => unwatch());
+      unwatcher();
       console.log('✅ 已停止所有监听器');
       process.exit(0);
     });
