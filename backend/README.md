@@ -1,199 +1,105 @@
-# NFT Market 事件监听器
-
-基于 Viem 2.x 的 NFT 市场事件监听器，用于实时监听 NFT 上架、买卖和下架事件。
+# TokenBank Backend - 合并版本
 
 ## 功能特性
 
-- ✅ 实时监听 NFT 上架事件 (NFTListed)
-- ✅ 实时监听 NFT 买卖事件 (NFTSold)
-- ✅ 实时监听 NFT 下架事件 (NFTDelisted)
-- ✅ 支持自定义合约地址和 RPC URL
-- ✅ 美观的终端输出格式
+- ✅ **MyToken 转账索引** - 自动索引历史转账事件并存储到 SQLite
+- ✅ **实时监听** - 监听新的转账事件并实时更新数据库
+- ✅ **RESTful API** - 提供转账记录查询接口
+- ✅ **SIWE 认证** - 使用 Ethereum 签名进行身份验证
+- ✅ **统计信息** - 提供发送/接收统计
 
-## 安装依赖
+## 快速启动
 
+### 1. 启动 Anvil（本地测试链）
+
+在终端运行：
 ```bash
-cd backend
-npm install
-```
-
-或使用 pnpm：
-
-```bash
-cd backend
-pnpm install
-```
-
-## 配置
-
-### 环境变量
-
-创建 `.env` 文件（可选）：
-
-```env
-RPC_URL=http://127.0.0.1:8545
-NFT_MARKET_ADDRESS=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-```
-
-### ABI 文件管理
-
-后端使用独立的 ABI 文件，位于 `abis/NFTMarket.json`。
-
-**更新 ABI 文件的方法：**
-
-```bash
-# 1. 在项目根目录编译合约
-cd ..
-forge build
-
-# 2. 复制最新的 ABI 文件到后端目录
-cp out/NFTMarket.sol/NFTMarket.json backend/abis/
-```
-
-**生产环境注意事项：**
-
-- ABI 文件已包含在 `backend/abis/` 目录中，无需依赖 Foundry 编译输出
-- 部署前请确保 ABI 文件与链上部署的合约版本一致
-- 更新合约后，务必重新编译并复制 ABI 文件
-
-## 使用方法
-
-### 启动监听器
-
-```bash
-npm run start:viem
-```
-
-或直接运行：
-
-```bash
-node index.js
-```
-
-监听器启动后会显示：
-
-```
-==============================================
-      NFT Market Event Listener (Viem)
-==============================================
-📡 连接到: http://127.0.0.1:8545
-📄 监听合约: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-==============================================
-✅ 已连接到链 ID: 31337
-📊 当前区块号: 11
-
-🔔 开始监听所有事件...
-
-🚀 监听器已启动，等待新区块...
-按 Ctrl+C 停止监听
-```
-
-## 测试步骤
-
-### 1. 启动 Anvil 本地节点
-
-```bash
-anvil -p 8545
+anvil --port 8545
 ```
 
 ### 2. 部署合约
 
 ```bash
-forge script script/DeployToAnvil.s.sol:DeployToAnvil \
+forge script script/DeployTokenBank.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+```
+
+记录 MyToken 地址，更新 `config/index.js` 中的 `myTokenAddress`。
+
+### 3. 启动后端服务器
+
+```bash
+cd backend
+pnpm install
+pnpm run dev
+```
+
+服务器会自动：
+- 初始化数据库
+- 索引历史转账事件
+- 启动实时监听
+- 启动 API 服务器
+
+### 4. 启动前端
+
+```bash
+cd tokenbank-frontend
+pnpm run dev
+```
+
+## API 接口
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/nonce` | 获取 SIWE nonce |
+| POST | `/api/verify` | 验证 SIWE 签名 |
+| GET | `/api/me` | 获取当前用户信息 |
+| POST | `/api/logout` | 登出 |
+| GET | `/api/transfers/:address` | 获取转账记录（需认证） |
+| GET | `/api/transfers/:address/stats` | 获取转账统计（需认证） |
+| POST | `/api/admin/index` | 手动触发索引 |
+
+## 配置
+
+配置文件：`config/index.js`
+
+```javascript
+{
+  port: 3001,                    // 服务器端口
+  frontendUrl: 'http://localhost:5173',  // CORS 前端 URL
+  rpcUrl: 'http://127.0.0.1:8545',     // RPC 节点地址
+  myTokenAddress: '0x...',              // MyToken 合约地址
+  session: { secret: '...', maxAge: 24h },
+  database: { path: './transfers.db' },
+  indexer: { batchSize: 1000 }
+}
+```
+
+## 测试转账
+
+使用 cast 命令转账：
+
+```bash
+# 转账 100 MTK
+cast send 0x5FbDB2315678afecb367f032d93F642f64180aa3 \
+  "transfer(address,uint256)" \
+  0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
+  100000000000000000000 \
   --rpc-url http://127.0.0.1:8545 \
-  --broadcast \
   --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
-### 3. 设置环境变量
+转账后，后端会自动监听并记录到数据库。
 
-```bash
-export SENDER_ADDRESS="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"        # 发送者地址（Anvil 账户 0）
-export NFT_ADDRESS="0x5FbDB2315678afecb367f032d93F642f64180aa3"           # DigitalAvatar 地址
-export MARKET_TOKEN="0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"          # MarketToken 地址  
-export MARKET_ADDRESS="0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"        # NFTMarket 地址
-export PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-```
+## 数据库
 
-### 4. 铸造测试 NFT
-
-```bash
-cast send $NFT_ADDRESS "safeMint(address,string)" $SENDER_ADDRESS "https://example.com/nft/0" \
-  --rpc-url http://127.0.0.1:8545 \
-  --private-key $PRIVATE_KEY
-```
-
-### 5. 铸造测试代币
-
-```bash
-cast send $MARKET_TOKEN "mint(address,uint256)" $SENDER_ADDRESS 1000000000000000000000 \
-  --rpc-url http://127.0.0.1:8545 \
-  --private-key $PRIVATE_KEY
-```
-
-### 6. 授权市场合约操作 NFT
-
-```bash
-cast send $NFT_ADDRESS "setApprovalForAll(address,bool)" $MARKET_ADDRESS true \
-  --rpc-url http://127.0.0.1:8545 \
-  --private-key $PRIVATE_KEY
-```
-
-### 7. 上架 NFT（触发事件）
-
-```bash
-cast send "$MARKET_ADDRESS" "list(uint256,uint256)" 0 100000000000000000000 \
-  --rpc-url http://127.0.0.1:8545 \
-  --private-key "$PRIVATE_KEY"
-```
-
-### 8. 查看监听器输出
-
-监听器会实时显示事件信息：
-
-```
-📦 新区块: 12
-
-═══════════════════════════════════════════════════
-📅 2026/6/11 17:30:36
-📦 [上架事件] NFT Listed
-├─ 区块号: 12
-├─ 交易哈希: 0x70b48c6155f54922befebf106aea72d4bc7f98c6bed95343fec8f10b29d5aa30
-├─ 卖家: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-├─ Token ID: 0
-└─ 价格: 100 MTK
-═══════════════════════════════════════════════════
-```
-
-## Anvil 测试账户
-
-Anvil 默认提供 10 个测试账户，每个账户有 10000 ETH：
-
-| 账户 | 地址 | 私钥 |
-|------|------|------|
-| 0 | 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 | 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 |
-| 1 | 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 | 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d |
-| 2 | 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC | 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a |
-| ... | ... | ... |
-
-## 技术栈
-
-- **Node.js** - 运行环境
-- **Viem 2.x** - 以太坊交互库
-- **Anvil** - 本地开发节点
-- **Foundry** - 智能合约开发框架
-
-## 停止监听器
-
-按 `Ctrl+C` 停止监听器。
+- 文件：`transfers.db`（SQLite）
+- 表：`transfers` - 转账记录
+- 表：`indexer_state` - 索引状态（记录最后处理的区块）
 
 ## 注意事项
 
-1. 确保 Anvil 节点正在运行
-2. 确保合约已正确部署
-3. 确保环境变量中的合约地址正确
-4. 监听器使用轮询机制，默认间隔为 1000ms
-
-## 许可证
-
-MIT
+1. 确保 Anvil 正在运行
+2. 部署合约后更新配置文件中的合约地址
+3. 查询转账记录需要先进行 SIWE 登录
+4. 只能查询自己的转账记录
+5. BigInt 错误已修复：所有区块号和数值都转换为普通数字或字符串

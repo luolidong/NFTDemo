@@ -1,12 +1,10 @@
 import { createConfig, http } from 'wagmi';
-import { mainnet, sepolia } from '@reown/appkit/networks';
-import { injected, walletConnect, coinbaseWallet } from 'wagmi/connectors';
+import { injected } from 'wagmi/connectors';
 import appConfig from './index.js';
 
 const anvil = {
-  ...mainnet,
   id: 31337,
-  name: 'Anvil',
+  name: 'Anvil Local',
   nativeCurrency: { name: 'Anvil Local', symbol: 'ETH', decimals: 18 },
   rpcUrls: {
     default: { http: ['http://127.0.0.1:8545'] },
@@ -19,27 +17,13 @@ const anvil = {
 };
 
 export const wagmiConfig = createConfig({
-  chains: [anvil, sepolia, mainnet],
+  chains: [anvil],
   connectors: [
-    injected(),
-    coinbaseWallet({
-      appName: appConfig.appName,
-    }),
-    walletConnect({
-      projectId: appConfig.walletConnectProjectId,
-      metadata: {
-        name: appConfig.appName,
-        description: 'TokenBank DApp',
-        url: appConfig.appUrl,
-        icons: ['https://example.com/favicon.ico'],
-      },
-    }),
+    injected({ target: 'metaMask' }),
   ],
   transports: {
-    [anvil.id]: http(),
-    [mainnet.id]: http(),
-    [sepolia.id]: http(),
+    [anvil.id]: http('http://127.0.0.1:8545'),
   },
 });
 
-export const networks = [sepolia, anvil, mainnet];
+export const networks = [anvil];

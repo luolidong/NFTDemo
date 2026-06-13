@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useChainId, useAccount, useDisconnect, useWalletClient, useConnect } from 'wagmi';
-import { useAppKit } from '@reown/appkit/react';
-import { sepolia } from 'wagmi/chains';
 import { ethers } from 'ethers';
 import { TokenBankABI } from './abi/TokenBank.js';
 import { MyTokenABI } from './abi/MyToken.js';
-import { Wallet, ArrowUpCircle, ArrowDownCircle, Eye, RefreshCw, LogOut } from 'lucide-react';
+import { Wallet, ArrowUpCircle, ArrowDownCircle, Eye, RefreshCw, LogOut, History } from 'lucide-react';
+import { SiweLogin } from './components/SiweLogin.jsx';
+import { TransferList } from './components/TransferList.jsx';
 
 import appConfig from './config/index.js';
 
@@ -13,7 +13,6 @@ const TOKEN_BANK_ADDRESS = appConfig.tokenBankAddress;
 const MY_TOKEN_ADDRESS = appConfig.myTokenAddress;
 
 function App() {
-  const { open } = useAppKit();
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const { data: walletClient } = useWalletClient();
@@ -30,13 +29,15 @@ function App() {
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [message, setMessage] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showTransferList, setShowTransferList] = useState(false);
 
   const formatBalance = (balance) => {
     return ethers.formatUnits(balance, 18);
   };
 
-  // 支持的网络 ID: Sepolia (11155111), Mainnet (1), Anvil (31337)
-  const isSupportedNetwork = chainId === sepolia.id || chainId === 1 || chainId === 31337;
+  // 支持的网络 ID: Anvil (31337)
+  const isSupportedNetwork = chainId === 31337;
 
   const fetchData = async () => {
     if (!address || !isSupportedNetwork || !walletClient) return;
@@ -154,48 +155,60 @@ function App() {
         </header>
 
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-xl">
-          <div className="flex justify-end mb-6">
-            {isConnected ? (
-              <div className="flex items-center gap-3">
-                <span className="text-white/80 text-sm">
-                  {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
-                </span>
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              {isConnected && (
+                <SiweLogin
+                  onLogin={(addr) => setIsLoggedIn(true)}
+                  onLogout={() => setIsLoggedIn(false)}
+                />
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              {isConnected && isLoggedIn && (
                 <button
-                  onClick={() => disconnect()}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                  onClick={() => setShowTransferList(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"
                 >
-                  <LogOut className="w-4 h-4" />
-                  Disconnect
+                  <History className="w-4 h-4" />
+                  Transfer History
                 </button>
-              </div>
-            ) : (
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    const injectedConnector = connectors.find(c => c.type === 'injected');
-                    if (injectedConnector) {
-                      connect({ connector: injectedConnector });
-                    }
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
-                >
-                  <Wallet className="w-4 h-4" />
-                  MetaMask
-                </button>
-                <button
-                  onClick={() => open()}
-                  className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
-                >
-                  <Wallet className="w-4 h-4" />
-                  More Wallets
-                </button>
-              </div>
-            )}
+              )}
+              {isConnected ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-white/80 text-sm">
+                    {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
+                  </span>
+                  <button
+                    onClick={() => disconnect()}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      const injectedConnector = connectors.find(c => c.type === 'injected');
+                      if (injectedConnector) {
+                        connect({ connector: injectedConnector });
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    MetaMask
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          {chainId !== sepolia.id && chainId !== 31337 && isConnected && (
+          {chainId !== 31337 && isConnected && (
             <div className="mb-4 p-3 bg-yellow-500/20 text-yellow-400 rounded-lg text-sm">
-              Please switch to Sepolia or Anvil network
+              Please switch to Anvil network (Chain ID: 31337)
             </div>
           )}
 
@@ -297,6 +310,14 @@ function App() {
           <p>TokenBank - Secure Token Management</p>
         </footer>
       </div>
+
+      {/* Transfer List Modal */}
+      {showTransferList && address && (
+        <TransferList
+          address={address}
+          onClose={() => setShowTransferList(false)}
+        />
+      )}
     </div>
   );
 }
