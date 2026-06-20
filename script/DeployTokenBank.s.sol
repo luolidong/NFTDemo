@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 import "forge-std/Script.sol";
-import "../src/MyToken.sol";
+import "../src/MyPermitToken.sol";  // 使用支持 EIP-2612 的代币
 import "../src/TokenBank.sol";
 
 contract DeployTokenBank is Script {
@@ -13,12 +13,12 @@ contract DeployTokenBank is Script {
         
         vm.startBroadcast(deployerPrivateKey);
 
-        // 1. 部署 MyToken 合约
-        MyToken myToken = new MyToken();
-        console.log("MyToken deployed at:", address(myToken));
-        console.log("MyToken Name:", myToken.name());
-        console.log("MyToken Symbol:", myToken.symbol());
-        console.log("MyToken Total Supply:", myToken.totalSupply());
+        // 1. 部署 MyPermitToken 合约（支持 EIP-2612）
+        MyPermitToken myToken = new MyPermitToken();
+        console.log("MyPermitToken deployed at:", address(myToken));
+        console.log("MyPermitToken Name:", myToken.name());
+        console.log("MyPermitToken Symbol:", myToken.symbol());
+        console.log("MyPermitToken Total Supply:", myToken.totalSupply());
 
         // 2. 部署 TokenBank 合约（传入 MyToken 地址）
         TokenBank tokenBank = new TokenBank(address(myToken));

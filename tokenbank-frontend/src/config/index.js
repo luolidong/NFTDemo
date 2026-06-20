@@ -4,7 +4,7 @@ export default {
 
   // Contract addresses (部署后更新)
   tokenBankAddress: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
-  myTokenAddress: '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e',
+  myTokenAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
 
   // App metadata
   appName: 'TokenBank',

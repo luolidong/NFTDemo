@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useChainId, useAccount, useDisconnect, useWalletClient, useConnect } from 'wagmi';
 import { ethers } from 'ethers';
 import { TokenBankABI } from './abi/TokenBank.js';
 import { MyTokenABI } from './abi/MyToken.js';
-import { Wallet, ArrowUpCircle, ArrowDownCircle, Eye, RefreshCw, LogOut, History } from 'lucide-react';
+import { Wallet, ArrowUpCircle, ArrowDownCircle, Eye, RefreshCw, LogOut, History, Zap } from 'lucide-react';
 import { SiweLogin } from './components/SiweLogin.jsx';
 import { TransferList } from './components/TransferList.jsx';
 
@@ -24,9 +24,11 @@ function App() {
   const [bankBalance, setBankBalance] = useState('0');
   const [userTokenBalance, setUserTokenBalance] = useState('0');
   const [allowance, setAllowance] = useState('0');
+  const [nonce, setNonce] = useState(0);
   const [isOwner, setIsOwner] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
+  const [isPermitDepositing, setIsPermitDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [message, setMessage] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -39,7 +41,7 @@ function App() {
   // 支持的网络 ID: Anvil (31337)
   const isSupportedNetwork = chainId === 31337;
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!address || !isSupportedNetwork || !walletClient) return;
 
     try {
@@ -49,12 +51,13 @@ function App() {
       const tokenContract = new ethers.Contract(MY_TOKEN_ADDRESS, MyTokenABI, signer);
       const bankContract = new ethers.Contract(TOKEN_BANK_ADDRESS, TokenBankABI, signer);
 
-      const [userBal, bankBal, userDep, owner, allow] = await Promise.all([
+      const [userBal, bankBal, userDep, owner, allow, userNonce] = await Promise.all([
         tokenContract.balanceOf(address),
         tokenContract.balanceOf(TOKEN_BANK_ADDRESS),
         bankContract.getUserDeposit(address),
         bankContract.owner(),
         tokenContract.allowance(address, TOKEN_BANK_ADDRESS),
+        tokenContract.nonces(address),
       ]);
 
       setUserTokenBalance(formatBalance(userBal));
@@ -62,15 +65,18 @@ function App() {
       setUserDeposit(formatBalance(userDep));
       setIsOwner(owner.toLowerCase() === address.toLowerCase());
       setAllowance(formatBalance(allow));
+      setNonce(Number(userNonce));
     } catch (error) {
       console.error('Error fetching data:', error);
       setMessage('Failed to fetch data');
     }
-  };
+  }, [address, isSupportedNetwork, walletClient]);
 
   useEffect(() => {
-    fetchData();
-  }, [address, chainId]);
+    if (address && isSupportedNetwork && walletClient) {
+      fetchData();
+    }
+  }, [address, chainId, walletClient]);
 
   const handleApprove = async () => {
     if (!address || !depositAmount || !walletClient) return;
@@ -117,6 +123,113 @@ function App() {
       setMessage('Deposit failed: ' + error.message);
     } finally {
       setIsDepositing(false);
+    }
+  };
+
+  const handlePermitDeposit = async () => {
+    if (!address || !depositAmount || !walletClient) {
+      setMessage('Please connect wallet and enter an amount');
+      return;
+    }
+    
+    setIsPermitDepositing(true);
+    setMessage('');
+
+    try {
+      // Use HTTP provider for read operations
+      const httpProvider = new ethers.JsonRpcProvider('http://127.0.0.1:8545');
+      const readOnlyTokenContract = new ethers.Contract(MY_TOKEN_ADDRESS, MyTokenABI, httpProvider);
+      
+      // Get wallet address from walletClient
+      const walletAddress = walletClient.account.address;
+      
+      // Get chain ID from walletClient
+      const walletChainId = walletClient.chain.id;
+
+      const amount = ethers.parseUnits(depositAmount, 18);
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour from now
+
+      // Get nonce from chain
+      const nonceValue = await readOnlyTokenContract.nonces(walletAddress);
+      const name = await readOnlyTokenContract.name();
+
+      // EIP-712 domain
+      const domain = {
+        name: name,
+        version: '1',
+        chainId: walletChainId,
+        verifyingContract: MY_TOKEN_ADDRESS
+      };
+
+      // EIP-712 types for Permit
+      const types = {
+        Permit: [
+          { name: 'owner', type: 'address' },
+          { name: 'spender', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' }
+        ]
+      };
+
+      // EIP-712 message
+      const message = {
+        owner: walletAddress,
+        spender: TOKEN_BANK_ADDRESS,
+        value: amount,
+        nonce: nonceValue,
+        deadline: deadline
+      };
+
+      // Sign typed data using walletClient
+      setMessage('Please sign in MetaMask...');
+      
+      const signature = await walletClient.signTypedData({
+        account: walletAddress,
+        domain,
+        types,
+        primaryType: 'Permit',
+        message
+      });
+
+      // Parse signature
+      const { v, r, s } = ethers.Signature.from(signature);
+
+      // Update UI
+      setMessage('Waiting for transaction...');
+
+      // Encode function call data
+      const iface = new ethers.Interface(TokenBankABI);
+      const data = iface.encodeFunctionData('permitDeposit', [amount, deadline, v, r, s]);
+
+      // Send transaction using walletClient
+      const hash = await walletClient.sendTransaction({
+        to: TOKEN_BANK_ADDRESS,
+        data: data,
+        gas: BigInt(200000)
+      });
+
+      setMessage(`Transaction submitted: ${hash.slice(0, 10)}...`);
+
+      // Wait for confirmation
+      const receipt = await httpProvider.waitForTransaction(hash);
+      
+      if (receipt && receipt.status === 1) {
+        setMessage('Permit deposit successful!');
+        setDepositAmount('');
+        await fetchData();
+      } else {
+        setMessage('Transaction failed');
+      }
+    } catch (error) {
+      console.error('Permit deposit error:', error);
+      if (error.code === 4001) {
+        setMessage('Transaction rejected by user');
+      } else {
+        setMessage('Permit deposit failed: ' + error.message);
+      }
+    } finally {
+      setIsPermitDepositing(false);
     }
   };
 
@@ -238,6 +351,13 @@ function App() {
                 </div>
                 <div className="bg-white/5 rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
+                    <Zap className="w-4 h-4 text-yellow-400" />
+                    <span className="text-gray-400 text-sm">Nonce</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white">{nonce}</p>
+                </div>
+                <div className="bg-white/5 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
                     <RefreshCw className="w-4 h-4 text-orange-400" />
                     <span className="text-gray-400 text-sm">Allowance</span>
                   </div>
@@ -255,7 +375,7 @@ function App() {
 
               <div className="bg-white/5 rounded-xl p-4 mb-4">
                 <h3 className="text-white font-semibold mb-3">Deposit Tokens</h3>
-                <div className="flex gap-3">
+                <div className="flex gap-3 mb-3">
                   <input
                     type="number"
                     value={depositAmount}
@@ -279,6 +399,22 @@ function App() {
                     Deposit
                   </button>
                 </div>
+                <div className="flex gap-3">
+                  <div className="flex-1 text-gray-400 text-sm">
+                    Traditional method: Approve → Deposit (2 transactions)
+                  </div>
+                  <button
+                    onClick={handlePermitDeposit}
+                    disabled={isPermitDepositing || !depositAmount}
+                    className="flex items-center gap-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-colors disabled:opacity-50"
+                  >
+                    <Zap className="w-4 h-4" />
+                    {isPermitDepositing ? 'Depositing...' : 'Permit Deposit'}
+                  </button>
+                </div>
+                <p className="text-gray-400 text-xs mt-2">
+                  Permit method: One transaction with signature (gas efficient)
+                </p>
               </div>
 
               {isOwner && (

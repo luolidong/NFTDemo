@@ -20,6 +20,7 @@
 ### 功能特性
 
 - ✅ **TokenBank 存提款** - 存款和取款 MyToken
+- ✅ **Permit Deposit** - EIP-2612 无需 approve 的存款功能
 - ✅ **转账记录索引** - 自动索引所有 MyToken 转账事件
 - ✅ **SIWE 登录** - Sign-In with Ethereum 身份验证
 - ✅ **转账历史查询** - 查看发送/接收的转账记录
@@ -145,6 +146,35 @@ cast send 0xYourMyTokenAddress \
 ```
 
 刷新前端即可看到新转账记录。
+
+#### Permit Deposit (EIP-2612)
+
+Permit Deposit 是一种无需预先 approve 的存款方式，使用 EIP-2612 签名授权：
+
+1. **前端操作**：
+   - 输入存款金额
+   - 点击 "Permit Deposit"
+   - MetaMask 会弹出两次确认：
+     - 第一次：EIP-712 签名（授权）
+     - 第二次：交易确认（存款）
+
+2. **命令行测试**：
+
+```bash
+# 获取 nonce
+cast call 0xYourMyTokenAddress "nonces(address)(uint256)" 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --rpc-url http://127.0.0.1:8545
+
+# 签名 permit (需要使用 ethers.js 或其他库)
+# 前端会自动处理签名流程
+
+# 或者直接测试 permitDeposit
+# 前端已实现完整的 EIP-712 签名流程
+```
+
+**技术实现**：
+- 使用 wagmi `walletClient.signTypedData()` 进行 EIP-712 签名
+- 使用 `walletClient.sendTransaction()` 发送交易
+- 使用 ethers.js `Interface` 编码函数调用数据
 
 ---
 

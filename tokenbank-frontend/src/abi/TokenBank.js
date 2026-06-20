@@ -5,8 +5,21 @@ export const TokenBankABI = [
     "type": "constructor"
   },
   {
-    "inputs": [],
+    "inputs": [{"name": "_amount", "type": "uint256"}],
     "name": "deposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"name": "_amount", "type": "uint256"},
+      {"name": "_deadline", "type": "uint256"},
+      {"name": "_v", "type": "uint8"},
+      {"name": "_r", "type": "bytes32"},
+      {"name": "_s", "type": "bytes32"}
+    ],
+    "name": "permitDeposit",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
