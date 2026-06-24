@@ -3,7 +3,8 @@ import { useChainId, useAccount, useDisconnect, useWalletClient, useConnect } fr
 import { ethers } from 'ethers';
 import { TokenBankABI } from './abi/TokenBank.js';
 import { MyTokenABI } from './abi/MyToken.js';
-import { Wallet, ArrowUpCircle, ArrowDownCircle, Eye, RefreshCw, LogOut, History, Zap } from 'lucide-react';
+import { Permit2ABI } from './abi/Permit2.js';
+import { Wallet, ArrowUpCircle, ArrowDownCircle, Eye, RefreshCw, LogOut, History, Zap, Shield, ShieldCheck } from 'lucide-react';
 import { SiweLogin } from './components/SiweLogin.jsx';
 import { TransferList } from './components/TransferList.jsx';
 
@@ -11,6 +12,7 @@ import appConfig from './config/index.js';
 
 const TOKEN_BANK_ADDRESS = appConfig.tokenBankAddress;
 const MY_TOKEN_ADDRESS = appConfig.myTokenAddress;
+const PERMIT2_ADDRESS = appConfig.permit2Address;
 
 function App() {
   const { address, isConnected } = useAccount();
@@ -29,10 +31,15 @@ function App() {
   const [isApproving, setIsApproving] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
   const [isPermitDepositing, setIsPermitDepositing] = useState(false);
+  const [isPermit2Depositing, setIsPermit2Depositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [isApprovingPermit2, setIsApprovingPermit2] = useState(false);
   const [message, setMessage] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showTransferList, setShowTransferList] = useState(false);
+  const [permit2Allowance, setPermit2Allowance] = useState('0');
+  const [permit2Nonce, setPermit2Nonce] = useState(0);
+  const [isPermit2Approved, setIsPermit2Approved] = useState(false);
 
   const formatBalance = (balance) => {
     return ethers.formatUnits(balance, 18);
@@ -50,14 +57,17 @@ function App() {
 
       const tokenContract = new ethers.Contract(MY_TOKEN_ADDRESS, MyTokenABI, signer);
       const bankContract = new ethers.Contract(TOKEN_BANK_ADDRESS, TokenBankABI, signer);
+      const permit2Contract = new ethers.Contract(PERMIT2_ADDRESS, Permit2ABI, signer);
 
-      const [userBal, bankBal, userDep, owner, allow, userNonce] = await Promise.all([
+      const [userBal, bankBal, userDep, owner, allow, userNonce, permit2Allow, permit2NonceValue] = await Promise.all([
         tokenContract.balanceOf(address),
         tokenContract.balanceOf(TOKEN_BANK_ADDRESS),
         bankContract.getUserDeposit(address),
         bankContract.owner(),
         tokenContract.allowance(address, TOKEN_BANK_ADDRESS),
         tokenContract.nonces(address),
+        tokenContract.allowance(address, PERMIT2_ADDRESS),
+        permit2Contract.nonces(address, MY_TOKEN_ADDRESS),
       ]);
 
       setUserTokenBalance(formatBalance(userBal));
@@ -66,6 +76,9 @@ function App() {
       setIsOwner(owner.toLowerCase() === address.toLowerCase());
       setAllowance(formatBalance(allow));
       setNonce(Number(userNonce));
+      setPermit2Allowance(formatBalance(permit2Allow));
+      setPermit2Nonce(Number(permit2NonceValue));
+      setIsPermit2Approved(permit2Allow.toString() !== '0');
     } catch (error) {
       console.error('Error fetching data:', error);
       setMessage('Failed to fetch data');
@@ -233,6 +246,126 @@ function App() {
     }
   };
 
+  const handleApprovePermit2 = async () => {
+    if (!address || !walletClient) return;
+    setIsApprovingPermit2(true);
+    setMessage('');
+
+    try {
+      const provider = new ethers.BrowserProvider(walletClient);
+      const signer = await provider.getSigner();
+      const tokenContract = new ethers.Contract(MY_TOKEN_ADDRESS, MyTokenABI, signer);
+
+      const maxAmount = ethers.MaxUint256;
+      const tx = await tokenContract.approve(PERMIT2_ADDRESS, maxAmount);
+      await tx.wait();
+      
+      setMessage('Permit2 approval successful!');
+      await fetchData();
+    } catch (error) {
+      console.error('Permit2 approval error:', error);
+      setMessage('Permit2 approval failed: ' + error.message);
+    } finally {
+      setIsApprovingPermit2(false);
+    }
+  };
+
+  const handlePermit2Deposit = async () => {
+    if (!address || !depositAmount || !walletClient) {
+      setMessage('Please connect wallet and enter an amount');
+      return;
+    }
+    
+    setIsPermit2Depositing(true);
+    setMessage('');
+
+    try {
+      const httpProvider = new ethers.JsonRpcProvider('http://127.0.0.1:8545');
+      const permit2Contract = new ethers.Contract(PERMIT2_ADDRESS, Permit2ABI, httpProvider);
+      const readOnlyTokenContract = new ethers.Contract(MY_TOKEN_ADDRESS, MyTokenABI, httpProvider);
+      
+      const walletAddress = walletClient.account.address;
+      const walletChainId = walletClient.chain.id;
+
+      const amount = ethers.parseUnits(depositAmount, 18);
+      const expiration = BigInt(Math.floor(Date.now() / 1000) + 3600 * 24 * 7); // 7 days from now
+      const nonceValue = await permit2Contract.nonces(walletAddress, MY_TOKEN_ADDRESS);
+      const permit2Name = await permit2Contract.name();
+
+      const domain = {
+        name: permit2Name,
+        version: '1',
+        chainId: walletChainId,
+        verifyingContract: PERMIT2_ADDRESS
+      };
+
+      const types = {
+        PermitTransferFrom: [
+          { name: 'permitted', type: 'address' },
+          { name: 'spender', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+          { name: 'expiration', type: 'uint256' },
+          { name: 'nonce', type: 'uint256' }
+        ]
+      };
+
+      const permit = {
+        permitted: MY_TOKEN_ADDRESS,
+        spender: TOKEN_BANK_ADDRESS,
+        amount: amount,
+        expiration: expiration,
+        nonce: nonceValue
+      };
+
+      setMessage('Please sign in MetaMask...');
+      
+      const signature = await walletClient.signTypedData({
+        account: walletAddress,
+        domain,
+        types,
+        primaryType: 'PermitTransferFrom',
+        message: permit
+      });
+
+      const transferDetails = {
+        to: TOKEN_BANK_ADDRESS,
+        requestedAmount: amount
+      };
+
+      setMessage('Waiting for transaction...');
+
+      const iface = new ethers.Interface(TokenBankABI);
+      const data = iface.encodeFunctionData('depositWithPermit2', [permit, transferDetails, walletAddress, signature]);
+
+      const hash = await walletClient.sendTransaction({
+        to: TOKEN_BANK_ADDRESS,
+        data: data,
+        gas: BigInt(200000)
+      });
+
+      setMessage(`Transaction submitted: ${hash.slice(0, 10)}...`);
+
+      const receipt = await httpProvider.waitForTransaction(hash);
+      
+      if (receipt && receipt.status === 1) {
+        setMessage('Permit2 deposit successful!');
+        setDepositAmount('');
+        await fetchData();
+      } else {
+        setMessage('Transaction failed');
+      }
+    } catch (error) {
+      console.error('Permit2 deposit error:', error);
+      if (error.code === 4001) {
+        setMessage('Transaction rejected by user');
+      } else {
+        setMessage('Permit2 deposit failed: ' + error.message);
+      }
+    } finally {
+      setIsPermit2Depositing(false);
+    }
+  };
+
   const handleWithdraw = async () => {
     if (!address || !isOwner || !walletClient) return;
     setIsWithdrawing(true);
@@ -363,6 +496,25 @@ function App() {
                   </div>
                   <p className="text-2xl font-bold text-white">{allowance} MTK</p>
                 </div>
+                <div className="bg-white/5 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="w-4 h-4 text-cyan-400" />
+                    <span className="text-gray-400 text-sm">Permit2 Approved</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isPermit2Approved ? (
+                      <>
+                        <ShieldCheck className="w-5 h-5 text-green-400" />
+                        <span className="text-lg font-bold text-green-400">Yes</span>
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="w-5 h-5 text-red-400" />
+                        <span className="text-lg font-bold text-red-400">No</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {message && (
@@ -414,6 +566,47 @@ function App() {
                 </div>
                 <p className="text-gray-400 text-xs mt-2">
                   Permit method: One transaction with signature (gas efficient)
+                </p>
+              </div>
+
+              <div className="bg-white/5 rounded-xl p-4 mb-4">
+                <h3 className="text-white font-semibold mb-3">Deposit with Permit2</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex-1 text-gray-400 text-sm">
+                    {isPermit2Approved ? (
+                      <span className="text-green-400">✓ MPT2 is approved for Permit2</span>
+                    ) : (
+                      <span>MPT2 is not approved for Permit2. Please approve first.</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleApprovePermit2}
+                    disabled={isApprovingPermit2 || isPermit2Approved}
+                    className="flex items-center gap-1 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors disabled:opacity-50"
+                  >
+                    <Shield className="w-4 h-4" />
+                    {isApprovingPermit2 ? 'Approving...' : 'Approve Permit2'}
+                  </button>
+                </div>
+                <div className="flex gap-3">
+                  <input
+                    type="number"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400"
+                  />
+                  <button
+                    onClick={handlePermit2Deposit}
+                    disabled={isPermit2Depositing || !depositAmount || !isPermit2Approved}
+                    className="flex items-center gap-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg hover:from-cyan-600 hover:to-blue-600 transition-colors disabled:opacity-50"
+                  >
+                    <Zap className="w-4 h-4" />
+                    {isPermit2Depositing ? 'Depositing...' : 'Permit2 Deposit'}
+                  </button>
+                </div>
+                <p className="text-gray-400 text-xs mt-2">
+                  Permit2 method: Use Permit2 signature for gas-efficient transactions
                 </p>
               </div>
 

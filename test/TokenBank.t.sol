@@ -21,7 +21,8 @@ contract TokenBankTest is Test {
         token = new MyPermitToken();
 
         // 部署银行合约
-        bank = new TokenBank(address(token));
+        address permit2Address = 0x000000000022D473030F116dDEE9F6B43aC78BA3; // Official Permit2 address
+        bank = new TokenBank(address(token), permit2Address);
 
         // 给 user1 转一些代币用于测试
         token.transfer(user1, 10000 * 10 ** 18);

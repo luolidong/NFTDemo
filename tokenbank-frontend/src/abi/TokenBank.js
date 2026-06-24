@@ -1,8 +1,15 @@
 export const TokenBankABI = [
   {
-    "inputs": [{"name": "_tokenAddress", "type": "address"}],
+    "inputs": [{"name": "_tokenAddress", "type": "address"}, {"name": "_permit2Address", "type": "address"}],
     "stateMutability": "nonpayable",
     "type": "constructor"
+  },
+  {
+    "inputs": [{"name": "_permit2Address", "type": "address"}],
+    "name": "setPermit2",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
     "inputs": [{"name": "_amount", "type": "uint256"}],
@@ -36,6 +43,34 @@ export const TokenBankABI = [
     "name": "getUserDeposit",
     "outputs": [{"name": "", "type": "uint256"}],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "permit2",
+    "outputs": [{"name": "", "type": "address"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"components": [
+        {"name": "permitted", "type": "address"},
+        {"name": "spender", "type": "address"},
+        {"name": "amount", "type": "uint256"},
+        {"name": "expiration", "type": "uint256"},
+        {"name": "nonce", "type": "uint256"}
+      ], "name": "_permit", "type": "tuple"},
+      {"components": [
+        {"name": "to", "type": "address"},
+        {"name": "requestedAmount", "type": "uint256"}
+      ], "name": "_transferDetails", "type": "tuple"},
+      {"name": "_owner", "type": "address"},
+      {"name": "_signature", "type": "bytes"}
+    ],
+    "name": "depositWithPermit2",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

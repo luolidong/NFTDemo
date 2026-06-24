@@ -20,8 +20,9 @@ contract DeployTokenBank is Script {
         console.log("MyPermitToken Symbol:", myToken.symbol());
         console.log("MyPermitToken Total Supply:", myToken.totalSupply());
 
-        // 2. 部署 TokenBank 合约（传入 MyToken 地址）
-        TokenBank tokenBank = new TokenBank(address(myToken));
+        // 2. 部署 TokenBank 合约（传入 MyToken 地址和 Permit2 地址）
+        address permit2Address = 0x000000000022D473030F116dDEE9F6B43aC78BA3; // Official Permit2 address
+        TokenBank tokenBank = new TokenBank(address(myToken), permit2Address);
         console.log("TokenBank deployed at:", address(tokenBank));
 
         // 3. 将一些代币转给测试用户（方便测试）

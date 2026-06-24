@@ -5,12 +5,35 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+interface IPermit2 {
+    struct PermitTransferFrom {
+        address permitted;
+        address spender;
+        uint256 amount;
+        uint256 expiration;
+        uint256 nonce;
+    }
+
+    struct SignatureTransferDetails {
+        address to;
+        uint256 requestedAmount;
+    }
+
+    function permitTransferFrom(
+        PermitTransferFrom calldata permit,
+        SignatureTransferDetails calldata transferDetails,
+        address owner,
+        bytes calldata signature
+    ) external;
+}
+
 /**
  * @title TokenBank
- * @dev 支持 EIP-2612 Permit 功能的 TokenBank
+ * @dev 支持 EIP-2612 Permit 和 Permit2 功能的 TokenBank
  */
 contract TokenBank is Ownable {
     IERC20 public immutable token;
+    IPermit2 public permit2;
 
     mapping(address => uint256) public deposits;
 
@@ -20,10 +43,22 @@ contract TokenBank is Ownable {
     /**
      * @dev 构造函数
      * @param _tokenAddress 代币合约地址
+     * @param _permit2Address Permit2合约地址
      */
-    constructor(address _tokenAddress) Ownable(msg.sender) {
+    constructor(address _tokenAddress, address _permit2Address) Ownable(msg.sender) {
         require(_tokenAddress != address(0), "Token address cannot be zero");
+        require(_permit2Address != address(0), "Permit2 address cannot be zero");
         token = IERC20(_tokenAddress);
+        permit2 = IPermit2(_permit2Address);
+    }
+
+    /**
+     * @dev 设置Permit2合约地址（仅限owner）
+     * @param _permit2Address Permit2合约地址
+     */
+    function setPermit2(address _permit2Address) external onlyOwner {
+        require(_permit2Address != address(0), "Permit2 address cannot be zero");
+        permit2 = IPermit2(_permit2Address);
     }
 
     /**
@@ -75,6 +110,35 @@ contract TokenBank is Ownable {
         deposits[msg.sender] += _amount;
 
         emit Deposit(msg.sender, _amount);
+    }
+
+    /**
+     * @dev 使用 Permit2 签名授权进行存款，无需先调用 approve
+     * @param _permit Permit2 的 permit 结构体
+     * @param _transferDetails 转账详情
+     * @param _owner 代币所有者地址
+     * @param _signature 用户签名
+     */
+    function depositWithPermit2(
+        IPermit2.PermitTransferFrom calldata _permit,
+        IPermit2.SignatureTransferDetails calldata _transferDetails,
+        address _owner,
+        bytes calldata _signature
+    ) external {
+        require(_permit.amount > 0, "Amount must be greater than 0");
+        require(_permit.permitted == address(token), "Permit token mismatch");
+        require(_permit.spender == address(this), "Spender must be TokenBank");
+
+        permit2.permitTransferFrom(
+            _permit,
+            _transferDetails,
+            _owner,
+            _signature
+        );
+
+        deposits[_owner] += _transferDetails.requestedAmount;
+
+        emit Deposit(_owner, _transferDetails.requestedAmount);
     }
 
     /**
