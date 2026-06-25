@@ -4,6 +4,7 @@ import { ethers } from 'ethers';
 import { TokenBankABI } from './abi/TokenBank.js';
 import { MyTokenABI } from './abi/MyToken.js';
 import { Permit2ABI } from './abi/Permit2.js';
+import { Delegator7702ABI } from './abi/Delegator7702.js';
 import { Wallet, ArrowUpCircle, ArrowDownCircle, Eye, RefreshCw, LogOut, History, Zap, Shield, ShieldCheck } from 'lucide-react';
 import { SiweLogin } from './components/SiweLogin.jsx';
 import { TransferList } from './components/TransferList.jsx';
@@ -13,6 +14,7 @@ import appConfig from './config/index.js';
 const TOKEN_BANK_ADDRESS = appConfig.tokenBankAddress;
 const MY_TOKEN_ADDRESS = appConfig.myTokenAddress;
 const PERMIT2_ADDRESS = appConfig.permit2Address;
+const DELEGATOR_7702_ADDRESS = appConfig.delegator7702Address;
 
 function App() {
   const { address, isConnected } = useAccount();
@@ -32,6 +34,7 @@ function App() {
   const [isDepositing, setIsDepositing] = useState(false);
   const [isPermitDepositing, setIsPermitDepositing] = useState(false);
   const [isPermit2Depositing, setIsPermit2Depositing] = useState(false);
+  const [isEip7702Depositing, setIsEip7702Depositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isApprovingPermit2, setIsApprovingPermit2] = useState(false);
   const [message, setMessage] = useState('');
@@ -366,6 +369,118 @@ function App() {
     }
   };
 
+  const handleEip7702Deposit = async () => {
+    if (!address || !depositAmount || !walletClient) {
+      setMessage('Please connect wallet and enter an amount');
+      return;
+    }
+    
+    setIsEip7702Depositing(true);
+    setMessage('');
+
+    try {
+      const httpProvider = new ethers.JsonRpcProvider('http://127.0.0.1:8545');
+      const delegatorContract = new ethers.Contract(DELEGATOR_7702_ADDRESS, Delegator7702ABI, httpProvider);
+      
+      const walletAddress = walletClient.account.address;
+      const walletChainId = walletClient.chain.id;
+
+      const amount = ethers.parseUnits(depositAmount, 18);
+
+      const tokenIface = new ethers.Interface(MyTokenABI);
+      const approveData = tokenIface.encodeFunctionData('approve', [TOKEN_BANK_ADDRESS, amount]);
+
+      const bankIface = new ethers.Interface(TokenBankABI);
+      const depositData = bankIface.encodeFunctionData('deposit', [amount]);
+
+      const delegatorName = await delegatorContract.name();
+      const delegatorVersion = await delegatorContract.version();
+
+      const delegatorDomain = {
+        name: delegatorName,
+        version: delegatorVersion,
+        chainId: walletChainId,
+        verifyingContract: DELEGATOR_7702_ADDRESS
+      };
+
+      const delegatorTypes = {
+        Delegation: [
+          { name: 'delegatee', type: 'address' },
+          { name: 'authority', type: 'bytes' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' }
+        ]
+      };
+
+      const delegatorNonce = await httpProvider.getTransactionCount(walletAddress);
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour from now
+
+      const delegationMessage = {
+        delegatee: DELEGATOR_7702_ADDRESS,
+        authority: '0x',
+        nonce: delegatorNonce,
+        deadline: deadline
+      };
+
+      setMessage('Signing delegation...');
+      
+      const delegationSignature = await walletClient.signTypedData({
+        account: walletAddress,
+        domain: delegatorDomain,
+        types: delegatorTypes,
+        primaryType: 'Delegation',
+        message: delegationMessage
+      });
+
+      const delegatorIface = new ethers.Interface(Delegator7702ABI);
+      
+      // 构建multicall数据：先approve，再deposit
+      const calls = [
+        {
+          target: MY_TOKEN_ADDRESS,
+          allowFailure: false,
+          callData: approveData
+        },
+        {
+          target: TOKEN_BANK_ADDRESS,
+          allowFailure: false,
+          callData: depositData
+        }
+      ];
+
+      const aggregateData = delegatorIface.encodeFunctionData('aggregate3', [calls]);
+
+      setMessage('Waiting for transaction...');
+
+      const hash = await walletClient.sendTransaction({
+        to: DELEGATOR_7702_ADDRESS,
+        data: aggregateData,
+        gas: BigInt(300000)
+      });
+
+      setMessage(`Transaction submitted: ${hash.slice(0, 10)}...`);
+
+      const receipt = await httpProvider.waitForTransaction(hash);
+      
+      if (receipt && receipt.status === 1) {
+        setMessage('EIP-7702 deposit successful!');
+        setDepositAmount('');
+        await fetchData();
+      } else {
+        setMessage('Transaction failed');
+      }
+    } catch (error) {
+      console.error('EIP-7702 deposit error:', error);
+      if (error.code === 4001) {
+        setMessage('Transaction rejected by user');
+      } else {
+        setMessage('EIP-7702 deposit failed: ' + error.message);
+      }
+    } finally {
+      setIsEip7702Depositing(false);
+    }
+  };
+
   const handleWithdraw = async () => {
     if (!address || !isOwner || !walletClient) return;
     setIsWithdrawing(true);
@@ -607,6 +722,30 @@ function App() {
                 </div>
                 <p className="text-gray-400 text-xs mt-2">
                   Permit2 method: Use Permit2 signature for gas-efficient transactions
+                </p>
+              </div>
+
+              <div className="bg-white/5 rounded-xl p-4 mb-4">
+                <h3 className="text-white font-semibold mb-3">Deposit with EIP-7702</h3>
+                <div className="flex gap-3">
+                  <input
+                    type="number"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-amber-400"
+                  />
+                  <button
+                    onClick={handleEip7702Deposit}
+                    disabled={isEip7702Depositing || !depositAmount}
+                    className="flex items-center gap-1 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 transition-colors disabled:opacity-50"
+                  >
+                    <Zap className="w-4 h-4" />
+                    {isEip7702Depositing ? 'Depositing...' : 'EIP-7702 Deposit'}
+                  </button>
+                </div>
+                <p className="text-gray-400 text-xs mt-2">
+                  EIP-7702 method: Uses MetaMask Delegator to combine permit + deposit in one transaction
                 </p>
               </div>
 
