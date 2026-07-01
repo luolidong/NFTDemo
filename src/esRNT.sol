@@ -7,6 +7,7 @@ contract esRNT {
         uint64 startTime; 
         uint256 amount;
     }
+   
     LockInfo[] private _locks;
 
     constructor() { 
