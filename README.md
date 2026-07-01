@@ -328,21 +328,25 @@ export const wagmiConfig = createConfig({
 NFTDemo/
 ├── src/
 │   ├── DigitalAvatar.sol    # ERC721 NFT 合约
+│   ├── NMTNFT.sol           # 升级型 ERC721 NFT 合约 (UUPS)
 │   ├── MarketToken.sol      # ERC1363 市场代币合约
 │   └── NFTMarket.sol        # NFT 市场合约
 ├── test/
 │   ├── DigitalAvatar.t.sol  # NFT 合约测试
+│   ├── NMTNFT.t.sol         # 升级型 NFT 合约测试
 │   └── NFTMarket.t.sol      # NFT 市场测试
 ├── script/
 │   ├── DeployDigitalAvatar.s.sol   # 部署 NFT 合约
+│   ├── DeployNMTNFT.s.sol          # 部署升级型 NFT 合约
 │   ├── MintDigitalAvatar.s.sol     # 铸造 NFT
 │   └── DeployNFTMarket.s.sol       # 部署完整市场
 ├── metadata/
 │   ├── avatar.jpg          # NFT 图片资源
 │   └── metadata.json       # NFT 元数据
 └── lib/
-    ├── forge-std/          # Foundry 标准库
-    └── openzeppelin-contracts/  # OpenZeppelin 合约库
+    ├── forge-std/                          # Foundry 标准库
+    ├── openzeppelin-contracts/             # OpenZeppelin 合约库
+    └── openzeppelin-contracts-upgradeable/ # OpenZeppelin 升级型合约库
 ```
 
 ## 合约说明
@@ -391,7 +395,14 @@ foundryup
 ### 2. 安装依赖
 
 ```bash
+forge install
+```
+
+如果是首次克隆项目，需要安装所有依赖：
+
+```bash
 forge install openzeppelin/openzeppelin-contracts
+forge install OpenZeppelin/openzeppelin-contracts-upgradeable@v5.6.0
 ```
 
 ### 3. 创建钱包（安全方式）
