@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
+import "@openzeppelin/foundry-upgrades/Upgrades.sol";
 import "../src/DigitalAvatar.sol";
 import "../src/MyPermitToken.sol";
 import "../src/AirdopMerkleNFTMarket.sol";
@@ -26,7 +27,12 @@ contract AirdopMerkleNFTMarketTest is Test {
 
         nft = new DigitalAvatar();
         token = new MyPermitToken();
-        market = new AirdopMerkleNFTMarket(address(nft), address(token));
+        
+        address proxy = Upgrades.deployUUPSProxy(
+            "AirdopMerkleNFTMarket.sol:AirdopMerkleNFTMarket",
+            abi.encodeCall(AirdopMerkleNFTMarket.initialize, (address(nft), address(token)))
+        );
+        market = AirdopMerkleNFTMarket(proxy);
 
         nft.safeMint(address(0x1), "ipfs://test");
 

@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
-import "@openzeppelin/contracts/utils/Multicall.sol";
+import "@openzeppelin/contracts-upgradeable/utils/MulticallUpgradeable.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import "./NFTMarket.sol";
 
-contract AirdopMerkleNFTMarket is Multicall, NFTMarket {
+contract AirdopMerkleNFTMarket is MulticallUpgradeable, NFTMarket {
     bytes32 public merkleRoot;
     mapping(address => bool) public claimed;
 
     event Claimed(address indexed claimer, uint256 indexed tokenId);
     event MerkleRootUpdated(bytes32 indexed newRoot);
 
-    constructor(address _nftContract, address _marketToken) 
-        NFTMarket(_nftContract, _marketToken) 
-    {}
+    function initialize(address _nftContract, address _marketToken) public override initializer {
+        NFTMarket.initialize(_nftContract, _marketToken);
+    }
 
     function setMerkleRoot(bytes32 _merkleRoot) external onlyOwner {
         merkleRoot = _merkleRoot;
@@ -71,4 +71,6 @@ contract AirdopMerkleNFTMarket is Multicall, NFTMarket {
         bytes32 leaf = keccak256(abi.encodePacked(account));
         return MerkleProof.verify(proof, merkleRoot, leaf);
     }
+
+    function _authorizeUpgrade(address newImplementation) internal view override(NFTMarket) onlyOwner {}
 }
