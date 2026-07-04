@@ -135,4 +135,65 @@ contract TokenBankTest is Test {
         assertEq(token.balanceOf(address(bank)), 0);
         assertEq(token.balanceOf(owner), ownerBalanceBefore + bankBalanceBefore);
     }
+
+    function test_Collect_RevertIf_BelowThreshold() public {
+        uint256 depositAmount = 50 * 10 ** 18;
+        vm.prank(user1);
+        token.approve(address(bank), depositAmount);
+        vm.prank(user1);
+        bank.deposit(depositAmount);
+
+        vm.expectRevert("Balance below threshold");
+        bank.collect();
+    }
+
+    function test_Collect_Owner() public {
+        uint256 depositAmount = 200 * 10 ** 18;
+        vm.prank(user1);
+        token.approve(address(bank), depositAmount);
+        vm.prank(user1);
+        bank.deposit(depositAmount);
+
+        uint256 bankBalanceBefore = token.balanceOf(address(bank));
+        uint256 ownerBalanceBefore = token.balanceOf(owner);
+
+        bank.collect();
+
+        uint256 expectedCollectAmount = bankBalanceBefore / 2;
+        assertEq(token.balanceOf(address(bank)), bankBalanceBefore - expectedCollectAmount);
+        assertEq(token.balanceOf(owner), ownerBalanceBefore + expectedCollectAmount);
+    }
+
+    function test_Collect_Collector() public {
+        address collectorAddress = 0x1234567890123456789012345678901234567890;
+        bank.setCollector(collectorAddress);
+
+        uint256 depositAmount = 200 * 10 ** 18;
+        vm.prank(user1);
+        token.approve(address(bank), depositAmount);
+        vm.prank(user1);
+        bank.deposit(depositAmount);
+
+        uint256 bankBalanceBefore = token.balanceOf(address(bank));
+        uint256 ownerBalanceBefore = token.balanceOf(owner);
+
+        vm.prank(collectorAddress);
+        bank.collect();
+
+        uint256 expectedCollectAmount = bankBalanceBefore / 2;
+        assertEq(token.balanceOf(address(bank)), bankBalanceBefore - expectedCollectAmount);
+        assertEq(token.balanceOf(owner), ownerBalanceBefore + expectedCollectAmount);
+    }
+
+    function test_Collect_RevertIf_NotAuthorized() public {
+        uint256 depositAmount = 200 * 10 ** 18;
+        vm.prank(user1);
+        token.approve(address(bank), depositAmount);
+        vm.prank(user1);
+        bank.deposit(depositAmount);
+
+        vm.prank(user1);
+        vm.expectRevert("Not authorized");
+        bank.collect();
+    }
 }

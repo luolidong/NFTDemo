@@ -39,6 +39,10 @@ contract TokenBank is Ownable {
 
     event Deposit(address indexed user, uint256 amount);
     event Withdraw(address indexed owner, uint256 amount);
+    event Collect(address indexed collector, uint256 amount);
+
+    uint256 public constant COLLECT_THRESHOLD = 100 * 10**18;
+    address public collector;
 
     /**
      * @dev 构造函数
@@ -151,6 +155,19 @@ contract TokenBank is Ownable {
         require(token.transfer(owner(), totalBalance), "Transfer failed");
 
         emit Withdraw(owner(), totalBalance);
+    }
+
+    function setCollector(address _collector) external onlyOwner {
+        collector = _collector;
+    }
+
+    function collect() external {
+        require(msg.sender == collector || msg.sender == owner(), "Not authorized");
+        uint256 totalBalance = token.balanceOf(address(this));
+        require(totalBalance >= COLLECT_THRESHOLD, "Balance below threshold");
+        uint256 collectAmount = totalBalance / 2;
+        require(token.transfer(owner(), collectAmount), "Transfer failed");
+        emit Collect(msg.sender, collectAmount);
     }
 
     /**
