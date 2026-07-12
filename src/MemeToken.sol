@@ -26,8 +26,14 @@ contract MemeToken is IERC20 {
     mapping(address => mapping(address => uint256)) public allowance;
     
     bool public initialized;
+    address public launchpad;
 
     event Mint(address indexed to, uint256 amount);
+    
+    modifier onlyLaunchpad() {
+        require(msg.sender == launchpad, "Only launchpad can call");
+        _;
+    }
 
     function initialize(string calldata name_, string calldata symbol_, uint256 initialSupply_, uint256 perMint_) external {
         require(!initialized, "Already initialized");
@@ -46,6 +52,40 @@ contract MemeToken is IERC20 {
         initialized = true;
         
         emit Transfer(address(0), msg.sender, totalSupply_);
+    }
+    
+    function initializeWithLaunchpad(string calldata name_, string calldata symbol_, uint256 initialSupply_, uint256 perMint_, address launchpad_) external {
+        require(!initialized, "Already initialized");
+        require(bytes(name_).length > 0, "Name cannot be empty");
+        require(bytes(symbol_).length > 0, "Symbol cannot be empty");
+        require(launchpad_ != address(0), "Launchpad cannot be zero");
+        
+        name = name_;
+        symbol = symbol_;
+        perMint = perMint_;
+        launchpad = launchpad_;
+        
+        totalSupply_ = initialSupply_;
+        balanceOf[msg.sender] = initialSupply_;
+        totalMinted = totalSupply_;
+        initialized = true;
+        
+        emit Transfer(address(0), msg.sender, totalSupply_);
+    }
+    
+    function mintTo(address to, uint256 amount) external onlyLaunchpad {
+        require(to != address(0), "To cannot be zero");
+        require(amount > 0, "Amount must be greater than 0");
+        
+        uint256 newTotal = totalSupply_ + amount;
+        require(newTotal >= totalSupply_, "Total supply overflow");
+        
+        totalSupply_ = newTotal;
+        balanceOf[to] += amount;
+        totalMinted += amount;
+        
+        emit Transfer(address(0), to, amount);
+        emit Mint(to, amount);
     }
 
     function totalSupply() external view returns (uint256) {
