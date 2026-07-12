@@ -1,15 +1,13 @@
-pragma solidity >=0.5.0;
+pragma solidity ^0.8.24;
 
-import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol';
-import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol';
-import '@uniswap/lib/contracts/libraries/Babylonian.sol';
-import '@uniswap/lib/contracts/libraries/FullMath.sol';
+import '../interfaces/IUniswapV2Pair.sol';
+import '../interfaces/IUniswapV2Factory.sol';
 
 import './SafeMath.sol';
 import './UniswapV2Library.sol';
+import './Babylonian.sol';
+import './FullMath.sol';
 
-// library containing some math for dealing with the liquidity shares of a pair, e.g. computing their exact value
-// in terms of the underlying tokens
 library UniswapV2LiquidityMathLibrary {
     using SafeMath for uint256;
 
